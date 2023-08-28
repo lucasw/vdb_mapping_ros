@@ -171,7 +171,7 @@ VDBMappingROS<VDBMappingT>::VDBMappingROS(const ros::NodeHandle& nh)
       m_cloud_subs.push_back(m_nh.subscribe<sensor_msgs::PointCloud2>(
         sensor_source.topic,
         1,
-        boost::bind(&VDBMappingROS::cloudCallback, this, _1, sensor_source)));
+        boost::bind(&VDBMappingROS::cloudCallback, this, boost::placeholders::_1, sensor_source)));
     }
   }
 
@@ -210,7 +210,7 @@ VDBMappingROS<VDBMappingT>::VDBMappingROS(const ros::NodeHandle& nh)
   }
   m_dynamic_reconfigure_initialized = false;
   m_dynamic_reconfigure_service.setCallback(
-    boost::bind(&VDBMappingROS::dynamicReconfigureCallback, this, _1, _2));
+    boost::bind(&VDBMappingROS::dynamicReconfigureCallback, this, boost::placeholders::_1, boost::placeholders::_2));
 }
 
 template <typename VDBMappingT>
