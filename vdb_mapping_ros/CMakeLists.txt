@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(vdb_mapping_ros)
 
-add_compile_options(-std=c++14 -Wall -Wextra -pedantic -Werror)
+add_compile_options(-Wall -Wextra -pedantic -Werror)
 
 
 if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
