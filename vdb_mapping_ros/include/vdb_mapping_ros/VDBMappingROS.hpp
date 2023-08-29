@@ -170,7 +170,7 @@ VDBMappingROS<VDBMappingT>::VDBMappingROS(const ros::NodeHandle& nh)
 
       m_cloud_subs.push_back(m_nh.subscribe<sensor_msgs::PointCloud2>(
         sensor_source.topic,
-        1,
+        200,
         boost::bind(&VDBMappingROS::cloudCallback, this, boost::placeholders::_1, sensor_source)));
     }
   }
@@ -464,6 +464,8 @@ void VDBMappingROS<VDBMappingT>::cloudCallback(const sensor_msgs::PointCloud2::C
   pcl::fromROSMsg(*cloud_msg, *cloud);
   geometry_msgs::TransformStamped cloud_origin_tf;
 
+  const auto stamp = cloud_msg->header.stamp;
+
   std::string sensor_frame = sensor_source.sensor_origin_frame.empty()
                                ? cloud_msg->header.frame_id
                                : sensor_source.sensor_origin_frame;
@@ -472,11 +474,13 @@ void VDBMappingROS<VDBMappingT>::cloudCallback(const sensor_msgs::PointCloud2::C
   try
   {
     cloud_origin_tf = m_tf_buffer.lookupTransform(
-      m_map_frame, sensor_frame, cloud_msg->header.stamp, ros::Duration(0.1));
+      m_map_frame, sensor_frame, stamp, ros::Duration(0.25));
   }
   catch (tf2::TransformException& ex)
   {
     ROS_ERROR_STREAM("Transform from " << sensor_frame << " to " << m_map_frame
+                                       << " " << stamp.toSec() << "s"
+                                       << " (" << (ros::Time::now() - stamp).toSec() << "s old)"
                                        << " frame failed:" << ex.what());
     return;
   }
