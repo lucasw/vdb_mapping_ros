@@ -426,6 +426,14 @@ private:
    * \brief Map Frame
    */
   std::string m_map_frame;
+
+  /*!
+   * \brief Map Stamp
+   * if initialized then the transform will be to this frame at this timestamp
+   * rather than just using the stamp of the incoming cloud
+   */
+  ros::Time m_map_stamp = ros::Time(0);
+
   /*!
    * \brief Robot Frame
    */

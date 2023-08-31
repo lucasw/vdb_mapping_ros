@@ -63,6 +63,8 @@ VDBMappingROS<VDBMappingT>::VDBMappingROS(const ros::NodeHandle& nh)
   {
     ROS_WARN_STREAM("No map frame specified");
   }
+  m_map_stamp = ros::Time::now();
+
   m_vdb_map->getGrid()->insertMeta("ros/map_frame", openvdb::StringMetadata(m_map_frame));
   m_priv_nh.param<std::string>("robot_frame", m_robot_frame, "");
   if (m_robot_frame.empty())
@@ -259,7 +261,9 @@ bool VDBMappingROS<VDBMappingT>::raytraceCallback(vdb_mapping_msgs::Raytrace::Re
   geometry_msgs::TransformStamped reference_tf;
   try
   {
-    reference_tf = m_tf_buffer.lookupTransform(m_map_frame, req.header.frame_id, req.header.stamp);
+    reference_tf = m_tf_buffer.lookupTransform(m_robot_frame, m_map_stamp,
+                                               req.header.frame_id, req.header.stamp,
+                                               m_map_frame);
 
     Eigen::Matrix<double, 4, 4> m = tf2::transformToEigen(reference_tf).matrix();
     Eigen::Matrix<double, 4, 1> origin, direction;
@@ -345,7 +349,9 @@ bool VDBMappingROS<VDBMappingT>::getMapSectionCallback(
   try
   {
     source_to_map_tf = m_tf_buffer.lookupTransform(
-      m_map_frame, req.header.frame_id, ros::Time(0), ros::Duration(1.0));
+      m_robot_frame, m_map_stamp,
+      req.header.frame_id, ros::Time(0),
+      m_map_frame, ros::Duration(1.0));
   }
   catch (tf::TransformException& ex)
   {
@@ -474,7 +480,9 @@ void VDBMappingROS<VDBMappingT>::cloudCallback(const sensor_msgs::PointCloud2::C
   try
   {
     cloud_origin_tf = m_tf_buffer.lookupTransform(
-      m_map_frame, sensor_frame, stamp, ros::Duration(0.25));
+      m_robot_frame, m_map_stamp,
+      sensor_frame, stamp,
+      m_map_frame, ros::Duration(0.25));
   }
   catch (tf2::TransformException& ex)
   {
@@ -492,7 +500,9 @@ void VDBMappingROS<VDBMappingT>::cloudCallback(const sensor_msgs::PointCloud2::C
     try
     {
       origin_to_map_tf = m_tf_buffer.lookupTransform(
-        m_map_frame, cloud_msg->header.frame_id, cloud_msg->header.stamp);
+        m_robot_frame, m_map_stamp,
+        cloud_msg->header.frame_id, cloud_msg->header.stamp,
+        m_map_frame);
     }
     catch (tf::TransformException& ex)
     {
@@ -661,6 +671,10 @@ void VDBMappingROS<VDBMappingT>::visualizationTimerCallback(const ros::TimerEven
 {
   (void)event;
   publishMap();
+
+  // TODO(lucasw) make this optional, only happen with a rolling buffer-window parameter is set
+  m_vdb_map->resetMap();
+  m_map_stamp = event.current_real;
 }
 
 template <typename VDBMappingT>
@@ -683,7 +697,7 @@ void VDBMappingROS<VDBMappingT>::sectionTimerCallback(const ros::TimerEvent& eve
   try
   {
     map_to_robot_tf = m_tf_buffer.lookupTransform(
-      m_map_frame, m_section_update_frame, ros::Time(0), ros::Duration(1.0));
+      m_robot_frame, m_section_update_frame, m_map_stamp /* ros::Time(0) */, ros::Duration(1.0));
   }
   catch (tf::TransformException& ex)
   {
@@ -728,10 +742,16 @@ void VDBMappingROS<VDBMappingT>::publishMap() const
 
   if (publish_vis_marker)
   {
+    // TODO(lucasw) does rviz show old markers where they are supposed to be back in time?
+    visualization_marker_msg.header.frame_id = m_robot_frame;
+    visualization_marker_msg.header.stamp = m_map_stamp;
+    visualization_marker_msg.frame_locked = false;
     m_visualization_marker_pub.publish(visualization_marker_msg);
   }
   if (publish_pointcloud)
   {
+    cloud_msg.header.frame_id = m_robot_frame;
+    cloud_msg.header.stamp = m_map_stamp;
     m_pointcloud_pub.publish(cloud_msg);
   }
 }
