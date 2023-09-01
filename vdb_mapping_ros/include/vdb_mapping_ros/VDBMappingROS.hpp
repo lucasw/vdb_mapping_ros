@@ -197,10 +197,13 @@ VDBMappingROS<VDBMappingT>::VDBMappingROS(const ros::NodeHandle& nh)
   m_occupancy_grid_service =
     m_priv_nh.advertiseService("get_occupancy_grid", &VDBMappingROS::occGridGenCallback, this);
 
+  // TODO(lucasw) temp disable, using publishMap out of accumulation update
+#if 0
   double visualization_rate;
   m_priv_nh.param<double>("visualization_rate", visualization_rate, 1.0);
   m_visualization_timer = m_nh.createTimer(
     ros::Rate(visualization_rate), &VDBMappingROS::visualizationTimerCallback, this);
+#endif
 
   m_priv_nh.param<bool>("accumulate_updates", m_accumulate_updates, false);
   if (m_accumulate_updates)
@@ -665,17 +668,15 @@ void VDBMappingROS<VDBMappingT>::mapSectionCallback(
   m_vdb_map->applyMapSectionUpdateGrid(msgToGrid(update_msg));
 }
 
-
+// TODO(lucasw) temp disable of this, using publishMap out of accumulation instead
+#if 0
 template <typename VDBMappingT>
 void VDBMappingROS<VDBMappingT>::visualizationTimerCallback(const ros::TimerEvent& event)
 {
   (void)event;
   publishMap();
-
-  // TODO(lucasw) make this optional, only happen with a rolling buffer-window parameter is set
-  m_vdb_map->resetMap();
-  m_map_stamp = event.current_real;
 }
+#endif
 
 template <typename VDBMappingT>
 void VDBMappingROS<VDBMappingT>::accumulationUpdateTimerCallback(const ros::TimerEvent& event)
@@ -687,6 +688,14 @@ void VDBMappingROS<VDBMappingT>::accumulationUpdateTimerCallback(const ros::Time
 
   publishUpdates(update, overwrite, event.current_real);
   m_vdb_map->resetUpdate();
+
+  // TODO(lucasw) make this optional, only happen with a rolling buffer-window parameter is set
+  bool do_map_reset = true;
+  if (do_map_reset) {
+    publishMap();
+    m_vdb_map->resetMap();
+    m_map_stamp = event.current_real;
+  }
 }
 
 template <typename VDBMappingT>
