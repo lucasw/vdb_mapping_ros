@@ -35,6 +35,10 @@ VDBMappingROS<VDBMappingT>::VDBMappingROS(const ros::NodeHandle& nh)
   , m_dynamic_reconfigure_service(ros::NodeHandle("~/vdb_mapping"))
   , m_tf_listener(m_tf_buffer)
 {
+  // allow tf buffers to fill
+  ros::Duration(1.0).sleep();
+  m_map_stamp = ros::Time::now();
+
   m_priv_nh.param<double>("resolution", m_resolution, 0.1);
   m_vdb_map = std::make_unique<VDBMappingT>(m_resolution);
 
@@ -63,7 +67,6 @@ VDBMappingROS<VDBMappingT>::VDBMappingROS(const ros::NodeHandle& nh)
   {
     ROS_WARN_STREAM("No map frame specified");
   }
-  m_map_stamp = ros::Time::now();
 
   m_vdb_map->getGrid()->insertMeta("ros/map_frame", openvdb::StringMetadata(m_map_frame));
   m_priv_nh.param<std::string>("robot_frame", m_robot_frame, "");
@@ -473,7 +476,19 @@ void VDBMappingROS<VDBMappingT>::cloudCallback(const sensor_msgs::PointCloud2::C
   pcl::fromROSMsg(*cloud_msg, *cloud);
   geometry_msgs::TransformStamped cloud_origin_tf;
 
+  const auto cur = ros::Time::now();
   const auto stamp = cloud_msg->header.stamp;
+  const auto stamp_age = cur - stamp;
+  const auto map_stamp_age = cur - m_map_stamp;
+  const auto max_age = ros::Duration(7.0);
+  if (stamp_age > max_age) {
+    ROS_WARN_STREAM_THROTTLE(1.0, "old stamp " << stamp_age.toSec());
+    return;
+  }
+  if (map_stamp_age > max_age) {
+    ROS_WARN_STREAM_THROTTLE(1.0, "old stamp " << map_stamp_age.toSec());
+    return;
+  }
 
   std::string sensor_frame = sensor_source.sensor_origin_frame.empty()
                                ? cloud_msg->header.frame_id
@@ -489,9 +504,9 @@ void VDBMappingROS<VDBMappingT>::cloudCallback(const sensor_msgs::PointCloud2::C
   }
   catch (tf2::TransformException& ex)
   {
-    ROS_ERROR_STREAM("Transform from " << sensor_frame << " to " << m_map_frame
-                                       << " " << stamp.toSec() << "s"
-                                       << " (" << (ros::Time::now() - stamp).toSec() << "s old)"
+    ROS_ERROR_STREAM_THROTTLE(1.0, "Transform from " << sensor_frame << " to " << m_map_frame
+                                       << "stamp: (" << stamp_age.toSec() << "s old)"
+                                       << "map stamp: (" << map_stamp_age.toSec() << "s old)"
                                        << " frame failed:" << ex.what());
     return;
   }
